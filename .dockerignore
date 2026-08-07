@@ -1,0 +1,10 @@
+app/node_modules
+app/build
+.git
+.gitignore
+README.md
+docs
+scripts
+terraform
+kubernetes
+jenkins
