@@ -5,6 +5,11 @@ pipeline {
         nodejs 'NODE-JS22'
     }
 
+    environment {
+        IMAGE_NAME = "yashdevops123/hotstar-clone"
+        IMAGE_TAG = "v1"
+    }
+
     stages {
 
         stage('Check Versions') {
@@ -19,9 +24,6 @@ pipeline {
                 dir('app') {
                     sh '''
                     npm config set fetch-retries 5
-                    npm config set fetch-retry-factor 10
-                    npm config set fetch-retry-mintimeout 20000
-                    npm config set fetch-retry-maxtimeout 120000
                     npm install
                     '''
                 }
@@ -36,31 +38,34 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Docker Build') {
             steps {
-                sh '''
-                docker build -t hotstar-clone:v1 -f docker/Dockerfile .
-                '''
+                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG -f docker/Dockerfile .'
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Docker Push') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
                     sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
-                    docker tag hotstar-clone:v1 $DOCKER_USER/hotstar-clone:v1
-
-                    docker push $DOCKER_USER/hotstar-clone:v1
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    docker push $IMAGE_NAME:$IMAGE_TAG
                     '''
                 }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                kubectl apply -f kubernetes/
+                kubectl rollout status deployment/hotstar-clone
+                '''
             }
         }
     }
