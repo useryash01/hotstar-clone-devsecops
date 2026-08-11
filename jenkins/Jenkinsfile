@@ -7,10 +7,17 @@ pipeline {
 
     environment {
         IMAGE_NAME = "yashdevops123/hotstar-clone"
-        IMAGE_TAG = "v1"
+        IMAGE_TAG  = "v1"
+        SCANNER_HOME = tool 'sonar-scanner'
     }
 
     stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
         stage('Check Versions') {
             steps {
@@ -23,10 +30,51 @@ pipeline {
             steps {
                 dir('app') {
                     sh '''
-                    npm config set fetch-retries 5
-                    npm install
+                        npm config set fetch-retries 5
+                        npm install
                     '''
                 }
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    dir('app') {
+                        sh '''
+                            $SCANNER_HOME/bin/sonar-scanner \
+                            -Dsonar.projectKey=hotstar-clone \
+                            -Dsonar.projectName=hotstar-clone \
+                            -Dsonar.sources=src \
+                            -Dsonar.host.url=$SONAR_HOST_URL \
+                            -Dsonar.login=$SONAR_AUTH_TOKEN
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                dependencyCheck additionalArguments: '--scan app',
+                                odcInstallation: 'OWASP-Dependency-Check'
+            }
+        }
+
+        stage('Publish Dependency Report') {
+            steps {
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+
+        stage('Trivy Filesystem Scan') {
+            steps {
+                sh '''
+                trivy fs \
+                --severity HIGH,CRITICAL \
+                --exit-code 0 \
+                app/
+                '''
             }
         }
 
@@ -40,21 +88,41 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG -f docker/Dockerfile .'
+                sh '''
+                docker build \
+                -t $IMAGE_NAME:$IMAGE_TAG \
+                -f docker/Dockerfile .
+                '''
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                sh '''
+                trivy image \
+                --severity HIGH,CRITICAL \
+                --exit-code 0 \
+                $IMAGE_NAME:$IMAGE_TAG
+                '''
             }
         }
 
         stage('Docker Push') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
 
                     sh '''
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    docker push $IMAGE_NAME:$IMAGE_TAG
+                        echo $DOCKER_PASS | docker login \
+                        -u $DOCKER_USER \
+                        --password-stdin
+
+                        docker push $IMAGE_NAME:$IMAGE_TAG
                     '''
                 }
             }
@@ -63,10 +131,25 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                kubectl apply -f kubernetes/
-                kubectl rollout status deployment/hotstar-clone
+                    kubectl apply -f kubernetes/
+                    kubectl rollout status deployment/hotstar-clone
                 '''
             }
+        }
+    }
+
+    post {
+
+        always {
+            cleanWs()
+        }
+
+        success {
+            echo "Pipeline completed successfully."
+        }
+
+        failure {
+            echo "Pipeline failed."
         }
     }
 }
