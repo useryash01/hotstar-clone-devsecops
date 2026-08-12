@@ -40,17 +40,27 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    dir('app') {
-                        sh """
-                        ${SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.projectKey=hotstar-clone \
-                        -Dsonar.projectName=hotstar-clone \
-                        -Dsonar.sources=src \
-                        """
-                    }
-                }
+            sh '''
+                echo "HOST=$SONAR_HOST_URL"
+
+                    if [ -n "$SONAR_AUTH_TOKEN" ]; then
+                echo "TOKEN_PRESENT=YES"
+                    else
+                echo "TOKEN_PRESENT=NO"
+                    fi
+            '''
+
+            dir('app') {
+                sh """
+                ${SCANNER_HOME}/bin/sonar-scanner \
+                -Dsonar.projectKey=hotstar-clone \
+                -Dsonar.projectName=hotstar-clone \
+                -Dsonar.sources=src
+                """
             }
         }
+    }
+}
 
         stage('Build React App') {
             steps {
