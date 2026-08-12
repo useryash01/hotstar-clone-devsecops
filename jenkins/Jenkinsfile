@@ -30,8 +30,7 @@ pipeline {
             steps {
                 dir('app') {
                     sh '''
-                        npm config set fetch-retries 5
-                        npm install
+                        npm ci --prefer-offline
                     '''
                 }
             }
