@@ -39,27 +39,43 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-            sh '''
-                echo "HOST=$SONAR_HOST_URL"
 
-                    if [ -n "$SONAR_AUTH_TOKEN" ]; then
-                echo "TOKEN_PRESENT=YES"
-                    else
-                echo "TOKEN_PRESENT=NO"
-                    fi
-            '''
+                    sh '''
+                        echo "HOST=$SONAR_HOST_URL"
 
-            dir('app') {
-                sh """
-                ${SCANNER_HOME}/bin/sonar-scanner \
-                -Dsonar.projectKey=hotstar-clone \
-                -Dsonar.projectName=hotstar-clone \
-                -Dsonar.sources=src
-                """
+                        if [ -n "$SONAR_AUTH_TOKEN" ]; then
+                            echo "TOKEN_PRESENT=YES"
+                        else
+                            echo "TOKEN_PRESENT=NO"
+                        fi
+                    '''
+
+                    dir('app') {
+                        sh """
+                            ${SCANNER_HOME}/bin/sonar-scanner \
+                            -Dsonar.projectKey=hotstar-clone \
+                            -Dsonar.projectName=hotstar-clone \
+                            -Dsonar.sources=src
+                        """
+                    }
+                }
             }
         }
-    }
-}
+
+        stage('OWASP Dependency Check') {
+            steps {
+                sh '''
+                    /opt/dependency-check/bin/dependency-check.sh \
+                        --project "Hotstar Clone" \
+                        --scan app \
+                        --format HTML \
+                        --out dependency-check-report \
+                        --disableYarnAudit \
+                        --disableAssembly \
+                        --noupdate
+                '''
+            }
+        }
 
         stage('Build React App') {
             steps {
@@ -73,8 +89,8 @@ pipeline {
             steps {
                 sh '''
                     docker build \
-                    -t $IMAGE_NAME:$IMAGE_TAG \
-                    -f docker/Dockerfile .
+                        -t $IMAGE_NAME:$IMAGE_TAG \
+                        -f docker/Dockerfile .
                 '''
             }
         }
@@ -91,8 +107,8 @@ pipeline {
 
                     sh '''
                         echo $DOCKER_PASS | docker login \
-                        -u $DOCKER_USER \
-                        --password-stdin
+                            -u $DOCKER_USER \
+                            --password-stdin
 
                         docker push $IMAGE_NAME:$IMAGE_TAG
                     '''
@@ -113,6 +129,11 @@ pipeline {
     post {
 
         always {
+            archiveArtifacts(
+                artifacts: 'dependency-check-report/dependency-check-report.html',
+                allowEmptyArchive: true
+            )
+
             cleanWs()
         }
 
