@@ -112,9 +112,10 @@ pipeline {
             steps {
                sh '''
                  trivy image \
-                --severity HIGH,CRITICAL \
-                $IMAGE_NAME:$IMAGE_TAG
-        '''
+                     --severity CRITICAL \
+                     --exit-code 1 \
+                     $IMAGE_NAME:$IMAGE_TAG
+                '''
             }
         }
 
