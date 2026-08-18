@@ -1,11 +1,28 @@
-app/node_modules/
-app/build/
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform.lock.hcl
 
-.env
-*.log
+# Jenkins
+jenkins/*.log
 
-.vscode/
-.idea/
-
-.DS_Store
+# Dependency Check
+dependency-check-report/
 reports/
+
+# Node
+**/node_modules/
+
+# Build output
+**/dist/
+**/build/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+dependency-check-*.zip

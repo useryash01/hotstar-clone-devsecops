@@ -19,6 +19,23 @@ pipeline {
             }
         }
 
+        stage('Test AWS ECR Access') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-ecr']
+            ]) {
+                sh '''
+                    aws sts get-caller-identity
+
+                    aws ecr describe-repositories \
+                        --repository-names hotstar-clone \
+                        --region ap-south-1
+                '''
+            }
+        }
+    }
+
         stage('Check Versions') {
             steps {
                 sh 'node --version'
