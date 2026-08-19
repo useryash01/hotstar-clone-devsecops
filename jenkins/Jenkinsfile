@@ -6,9 +6,13 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "yashdevops123/hotstar-clone"
-        IMAGE_TAG = "v1"
-        SCANNER_HOME = tool 'sonar-scanner'
+    IMAGE_NAME = "yashdevops123/hotstar-clone"
+    IMAGE_TAG = "${BUILD_NUMBER}"
+
+    ECR_REGISTRY = "634737373070.dkr.ecr.ap-south-1.amazonaws.com"
+    ECR_REPOSITORY = "hotstar-clone"
+
+    SCANNER_HOME = tool 'sonar-scanner'
     }
 
     stages {
@@ -18,23 +22,6 @@ pipeline {
                 checkout scm
             }
         }
-
-        stage('Test AWS ECR Access') {
-            steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-ecr']
-            ]) {
-                sh '''
-                    aws sts get-caller-identity
-
-                    aws ecr describe-repositories \
-                        --repository-names hotstar-clone \
-                        --region ap-south-1
-                '''
-            }
-        }
-    }
 
         stage('Check Versions') {
             steps {
@@ -136,26 +123,35 @@ pipeline {
             }
         }
 
-        stage('Docker Push') {
+        stage('Push Image to ECR') {
             steps {
                 withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
+                   [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr']
+        ]) {
+            sh '''
+                echo "Logging in to Amazon ECR..."
 
-                    sh '''
-                        echo $DOCKER_PASS | docker login \
-                            -u $DOCKER_USER \
-                            --password-stdin
+                aws ecr get-login-password \
+                    --region ap-south-1 | \
+                docker login \
+                    --username AWS \
+                    --password-stdin "$ECR_REGISTRY"
 
-                        docker push $IMAGE_NAME:$IMAGE_TAG
-                    '''
-                }
+                echo "Tagging image for ECR..."
+
+                docker tag \
+                    "$IMAGE_NAME:$IMAGE_TAG" \
+                    "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+                echo "Pushing image to ECR..."
+
+                docker push \
+                    "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+            '''
+                     }
+                 }
             }
-        }
 
         stage('Deploy to Kubernetes') {
             steps {
