@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: hotstar
-        image: yashdevops123/hotstar-clone:v1
+        image: 634737373070.dkr.ecr.ap-south-1.amazonaws.com/hotstar-clone:36
         ports:
         - containerPort: 80
 

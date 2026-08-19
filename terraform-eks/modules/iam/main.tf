@@ -37,7 +37,10 @@ resource "aws_iam_user_policy" "jenkins_ecr" {
           "ecr:CompleteLayerUpload",
           "ecr:InitiateLayerUpload",
           "ecr:PutImage",
-          "ecr:UploadLayerPart"
+          "ecr:UploadLayerPart",
+
+          # Temporary permission for Jenkins ECR access test
+          "ecr:DescribeRepositories"
         ]
 
         Resource = "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${var.repository_name}"

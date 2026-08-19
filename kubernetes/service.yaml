@@ -2,15 +2,15 @@ apiVersion: v1
 kind: Service
 
 metadata:
-  name: hotstar-service
+  name: hotstar-clone
 
 spec:
-  type: NodePort
-
   selector:
     app: hotstar
 
   ports:
-  - port: 80
-    targetPort: 80
-    nodePort: 30080
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+  type: ClusterIP
