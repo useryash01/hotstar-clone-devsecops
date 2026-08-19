@@ -6,16 +6,20 @@ pipeline {
     }
 
     environment {
-    IMAGE_NAME = "yashdevops123/hotstar-clone"
-    IMAGE_TAG = "${BUILD_NUMBER}"
+        IMAGE_NAME      = "yashdevops123/hotstar-clone"
+        IMAGE_TAG       = "${BUILD_NUMBER}"
 
-    ECR_REGISTRY = "634737373070.dkr.ecr.ap-south-1.amazonaws.com"
-    ECR_REPOSITORY = "hotstar-clone"
+        ECR_REGISTRY    = "634737373070.dkr.ecr.ap-south-1.amazonaws.com"
+        ECR_REPOSITORY  = "hotstar-clone"
 
-    SCANNER_HOME = tool 'sonar-scanner'
+        SCANNER_HOME    = tool 'sonar-scanner'
     }
 
     stages {
+
+        // --------------------------------------------------
+        // Checkout
+        // --------------------------------------------------
 
         stage('Checkout') {
             steps {
@@ -23,12 +27,23 @@ pipeline {
             }
         }
 
+        // --------------------------------------------------
+        // Verify Tools
+        // --------------------------------------------------
+
         stage('Check Versions') {
             steps {
                 sh 'node --version'
                 sh 'npm --version'
+                sh 'docker --version'
+                sh 'aws --version'
+                sh 'trivy --version'
             }
         }
+
+        // --------------------------------------------------
+        // Install Dependencies
+        // --------------------------------------------------
 
         stage('Install Dependencies') {
             steps {
@@ -40,31 +55,39 @@ pipeline {
             }
         }
 
+        // --------------------------------------------------
+        // SonarQube
+        // --------------------------------------------------
+
         stage('SonarQube Scan') {
             steps {
                 withSonarQubeEnv('SonarQube') {
 
                     sh '''
-                        echo "HOST=$SONAR_HOST_URL"
+                        echo "SonarQube Host: $SONAR_HOST_URL"
 
                         if [ -n "$SONAR_AUTH_TOKEN" ]; then
-                            echo "TOKEN_PRESENT=YES"
+                            echo "SONAR_TOKEN_PRESENT=YES"
                         else
-                            echo "TOKEN_PRESENT=NO"
+                            echo "SONAR_TOKEN_PRESENT=NO"
                         fi
                     '''
 
                     dir('app') {
                         sh """
                             ${SCANNER_HOME}/bin/sonar-scanner \
-                            -Dsonar.projectKey=hotstar-clone \
-                            -Dsonar.projectName=hotstar-clone \
-                            -Dsonar.sources=src
+                                -Dsonar.projectKey=hotstar-clone \
+                                -Dsonar.projectName=hotstar-clone \
+                                -Dsonar.sources=src
                         """
                     }
                 }
             }
         }
+
+        // --------------------------------------------------
+        // OWASP Dependency Check
+        // --------------------------------------------------
 
         stage('OWASP Dependency Check') {
             steps {
@@ -81,87 +104,177 @@ pipeline {
             }
         }
 
+        // --------------------------------------------------
+        // Publish OWASP Report
+        // --------------------------------------------------
+
         stage('Publish OWASP Report') {
             steps {
-            publishHTML(target: [
-            allowMissing: false,
-            alwaysLinkToLastBuild: true,
-            keepAll: true,
-            reportDir: 'dependency-check-report',
-            reportFiles: 'dependency-check-report.html',
-            reportName: 'OWASP Dependency-Check Report'
-              ])
-           }
+                publishHTML(target: [
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: 'dependency-check-report',
+                    reportFiles: 'dependency-check-report.html',
+                    reportName: 'OWASP Dependency-Check Report'
+                ])
+            }
         }
+
+        // --------------------------------------------------
+        // Build React Application
+        // --------------------------------------------------
 
         stage('Build React App') {
             steps {
                 dir('app') {
-                    sh 'CI=false npm run build'
+                    sh '''
+                        CI=false npm run build
+                    '''
                 }
             }
         }
 
+        // --------------------------------------------------
+        // Docker Build
+        // --------------------------------------------------
+
         stage('Docker Build') {
             steps {
                 sh '''
+                    echo "Building Docker image..."
+
                     docker build \
-                        -t $IMAGE_NAME:$IMAGE_TAG \
+                        -t "$IMAGE_NAME:$IMAGE_TAG" \
                         -f docker/Dockerfile .
+
+                    echo "Docker image created:"
+                    docker images "$IMAGE_NAME:$IMAGE_TAG"
                 '''
             }
         }
 
+        // --------------------------------------------------
+        // Trivy Security Scan
+        // --------------------------------------------------
+
         stage('Trivy Image Scan') {
             steps {
-               sh '''
-                 trivy image \
-                     --severity CRITICAL \
-                     --exit-code 1 \
-                     $IMAGE_NAME:$IMAGE_TAG
+                sh '''
+                    echo "Scanning Docker image with Trivy..."
+
+                    trivy image \
+                        --severity CRITICAL \
+                        --exit-code 1 \
+                        "$IMAGE_NAME:$IMAGE_TAG"
                 '''
             }
         }
+
+        // --------------------------------------------------
+        // Push Image to Amazon ECR
+        // --------------------------------------------------
 
         stage('Push Image to ECR') {
             steps {
                 withCredentials([
-                   [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-ecr']
-        ]) {
-            sh '''
-                echo "Logging in to Amazon ECR..."
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-ecr']
+                ]) {
 
-                aws ecr get-login-password \
-                    --region ap-south-1 | \
-                docker login \
-                    --username AWS \
-                    --password-stdin "$ECR_REGISTRY"
+                    sh '''
+                        echo "Logging in to Amazon ECR..."
 
-                echo "Tagging image for ECR..."
+                        aws ecr get-login-password \
+                            --region ap-south-1 | \
+                        docker login \
+                            --username AWS \
+                            --password-stdin "$ECR_REGISTRY"
 
-                docker tag \
-                    "$IMAGE_NAME:$IMAGE_TAG" \
-                    "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+                        echo "Tagging image for ECR..."
 
-                echo "Pushing image to ECR..."
+                        docker tag \
+                            "$IMAGE_NAME:$IMAGE_TAG" \
+                            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-                docker push \
-                    "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-            '''
-                     }
-                 }
+                        echo "Pushing image to ECR..."
+
+                        docker push \
+                            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+                        echo "Image pushed successfully:"
+                        echo "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+                    '''
+                }
             }
+        }
 
-        stage('Deploy to Kubernetes') {
+        // --------------------------------------------------
+        // Update Kubernetes Manifest
+        // --------------------------------------------------
+
+        stage('Update Kubernetes Manifest') {
             steps {
                 sh '''
-                    kubectl apply -f kubernetes/
-                    kubectl rollout status deployment/hotstar-clone
+                    echo "Updating Kubernetes deployment image..."
+
+                    sed -i \
+                        "s|image: .*hotstar-clone:.*|image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|" \
+                        kubernetes/deployment.yaml
+
+                    echo "Updated Kubernetes image:"
+                    grep "image:" kubernetes/deployment.yaml
                 '''
             }
         }
+
+        // --------------------------------------------------
+        // Commit and Push GitOps Change
+        // --------------------------------------------------
+
+        stage('Commit and Push GitOps Change') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-credentials',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_TOKEN'
+                    )
+                ]) {
+
+                    sh '''
+                        echo "Configuring Git..."
+
+                        git config user.name "Jenkins"
+                        git config user.email "jenkins@localhost"
+
+                        git add kubernetes/deployment.yaml
+
+                        if git diff --cached --quiet; then
+                            echo "No Kubernetes manifest changes detected."
+                        else
+                            echo "Committing Kubernetes manifest update..."
+
+                            git commit \
+                                -m "Update Hotstar image to ${IMAGE_TAG}"
+
+                            echo "Pushing GitOps change to GitHub..."
+
+                            git push \
+                                https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/useryash01/hotstar-clone-devsecops.git \
+                                HEAD:main
+
+                            echo "GitOps change pushed successfully."
+                        fi
+                    '''
+                }
+            }
+        }
     }
+
+    // --------------------------------------------------
+    // Post Actions
+    // --------------------------------------------------
 
     post {
 
