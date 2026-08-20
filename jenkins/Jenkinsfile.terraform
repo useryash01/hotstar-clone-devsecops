@@ -1,0 +1,98 @@
+pipeline {
+    agent any
+
+    environment {
+        TF_DIR = 'terraform-eks'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Terraform Version') {
+            steps {
+                sh '''
+                    terraform version
+                '''
+            }
+        }
+
+        stage('Terraform Format') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh '''
+                        terraform fmt -check -recursive
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh '''
+                        terraform init -input=false
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh '''
+                        terraform validate
+                    '''
+                }
+            }
+        }
+
+        stage('TFLint') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh '''
+                        tflint --recursive
+                    '''
+                }
+            }
+        }
+
+        stage('Checkov') {
+            steps {
+                sh '''
+                    checkov -d ${TF_DIR}
+                '''
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh '''
+                        terraform plan \
+                            -input=false \
+                            -out=tfplan
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+
+        success {
+            echo 'Terraform CI completed successfully.'
+        }
+
+        failure {
+            echo 'Terraform CI failed.'
+        }
+    }
+}
