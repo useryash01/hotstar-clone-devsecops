@@ -1,3 +1,4 @@
+# Managed by Argo CD GitOps
 apiVersion: apps/v1
 kind: Deployment
 
