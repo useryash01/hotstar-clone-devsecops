@@ -43,6 +43,8 @@ function App() {
   
     </div>
     <div className='z'>
+
+      <h2 style={{textAlign: 'center'}}>DevSecOps Deployment v46</h2>
             
       <Row title="Latest releases" fetchUrl={requests.fetchActionMovies} />
       <Row title="Free-Newly Added" fetchUrl={requests.fetchComedyMovies}/>
