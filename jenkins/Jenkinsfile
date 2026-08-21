@@ -175,6 +175,25 @@ pipeline {
             }
         }
 
+        stage('Verify AWS Credentials') {
+            steps {
+                withCredentials([
+                 [$class: 'AmazonWebServicesCredentialsBinding',
+                  credentialsId: 'aws-ecr']
+        ]) {
+            sh '''
+                echo "Testing AWS credentials..."
+                aws sts get-caller-identity
+
+                echo "Testing ECR access..."
+                aws ecr describe-repositories \
+                    --repository-names "$ECR_REPOSITORY" \
+                    --region ap-south-1
+                   '''
+                }
+            }
+        }
+
         // --------------------------------------------------
         // Push Image to Amazon ECR
         // --------------------------------------------------
