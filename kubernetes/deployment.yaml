@@ -1,4 +1,4 @@
-# Managed by Argo CD/Gitops
+# Managed by Argo CD Gitops
 apiVersion: apps/v1
 kind: Deployment
 
