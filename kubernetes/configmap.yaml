@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hotstar-config
+  namespace: default
+data:
+  APP_NAME: "hotstar-clone"
+  APP_ENV: "production"

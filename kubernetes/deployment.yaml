@@ -23,6 +23,12 @@ spec:
         image: 634737373070.dkr.ecr.ap-south-1.amazonaws.com/hotstar-clone:45
         ports:
         - containerPort: 80
+       
+        envFrom:
+        - configMapRef:
+            name: hotstar-config
+        - secretRef:
+            name: hotstar-secret
 
         resources:
           requests:
