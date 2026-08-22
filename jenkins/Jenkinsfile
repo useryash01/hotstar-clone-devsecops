@@ -1,7 +1,7 @@
 pipeline {
     agent any
 
-     triggers {
+    triggers {
         githubPush()
     }
 
@@ -32,10 +32,45 @@ pipeline {
         }
 
         // --------------------------------------------------
+        // Detect Jenkins-generated GitOps commit
+        // --------------------------------------------------
+
+        stage('Detect GitOps Commit') {
+            steps {
+                script {
+                    def commitMessage = sh(
+                        script: "git log -1 --pretty=%B",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Latest commit message: ${commitMessage}"
+
+                    if (commitMessage.contains('[ci-gitops]')) {
+                        env.SKIP_CI = 'true'
+
+                        echo "Jenkins-generated GitOps commit detected."
+                        echo "Skipping CI pipeline to prevent webhook loop."
+                    } else {
+                        env.SKIP_CI = 'false'
+
+                        echo "Normal application commit detected."
+                        echo "Running full CI/CD pipeline."
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------
         // Verify Tools
         // --------------------------------------------------
 
         stage('Check Versions') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 sh 'node --version'
                 sh 'npm --version'
@@ -50,6 +85,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Install Dependencies') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 dir('app') {
                     sh '''
@@ -64,6 +105,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('SonarQube Scan') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 withSonarQubeEnv('SonarQube') {
 
@@ -94,6 +141,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('OWASP Dependency Check') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 sh '''
                     /opt/dependency-check/bin/dependency-check.sh \
@@ -113,6 +166,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Publish OWASP Report') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 publishHTML(target: [
                     allowMissing: false,
@@ -130,6 +189,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Build React App') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 dir('app') {
                     sh '''
@@ -144,6 +209,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Docker Build') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 sh '''
                     echo "Building Docker image..."
@@ -163,36 +234,53 @@ pipeline {
         // --------------------------------------------------
 
         stage('Trivy Image Scan') {
-           steps {
-             sh '''
-            echo "Scanning Docker image with Trivy..."
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
 
-            trivy image \
-                --timeout 10m \
-                --scanners vuln \
-                --severity CRITICAL \
-                --ignore-unfixed \
-                --exit-code 1 \
-                "$IMAGE_NAME:$IMAGE_TAG"
-        '''
-    }
-}
+            steps {
+                sh '''
+                    echo "Scanning Docker image with Trivy..."
+
+                    trivy image \
+                        --timeout 10m \
+                        --scanners vuln \
+                        --severity CRITICAL \
+                        --ignore-unfixed \
+                        --exit-code 1 \
+                        "$IMAGE_NAME:$IMAGE_TAG"
+                '''
+            }
+        }
+
+        // --------------------------------------------------
+        // Verify AWS Credentials
+        // --------------------------------------------------
 
         stage('Verify AWS Credentials') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 withCredentials([
-                 [$class: 'AmazonWebServicesCredentialsBinding',
-                  credentialsId: 'aws-ecr']
-        ]) {
-            sh '''
-                echo "Testing AWS credentials..."
-                aws sts get-caller-identity
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-ecr']
+                ]) {
 
-                echo "Testing ECR access..."
-                aws ecr describe-repositories \
-                    --repository-names "$ECR_REPOSITORY" \
-                    --region ap-south-1
-                   '''
+                    sh '''
+                        echo "Testing AWS credentials..."
+                        aws sts get-caller-identity
+
+                        echo "Testing ECR access..."
+                        aws ecr describe-repositories \
+                            --repository-names "$ECR_REPOSITORY" \
+                            --region ap-south-1
+                    '''
                 }
             }
         }
@@ -202,6 +290,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Push Image to ECR') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -240,6 +334,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Update Kubernetes Manifest') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 sh '''
                     echo "Updating Kubernetes deployment image..."
@@ -259,6 +359,12 @@ pipeline {
         // --------------------------------------------------
 
         stage('Commit and Push GitOps Change') {
+            when {
+                expression {
+                    env.SKIP_CI != 'true'
+                }
+            }
+
             steps {
                 withCredentials([
                     usernamePassword(
@@ -282,7 +388,7 @@ pipeline {
                             echo "Committing Kubernetes manifest update..."
 
                             git commit \
-                                -m "Update Hotstar image to ${IMAGE_TAG}"
+                                -m "[ci-gitops] Update Hotstar image to ${BUILD_NUMBER}"
 
                             echo "Pushing GitOps change to GitHub..."
 
