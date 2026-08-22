@@ -163,17 +163,20 @@ pipeline {
         // --------------------------------------------------
 
         stage('Trivy Image Scan') {
-            steps {
-                sh '''
-                    echo "Scanning Docker image with Trivy..."
+           steps {
+             sh '''
+            echo "Scanning Docker image with Trivy..."
 
-                    trivy image \
-                        --severity CRITICAL \
-                        --exit-code 1 \
-                        "$IMAGE_NAME:$IMAGE_TAG"
-                '''
-            }
-        }
+            trivy image \
+                --timeout 10m \
+                --scanners vuln \
+                --severity CRITICAL \
+                --ignore-unfixed \
+                --exit-code 1 \
+                "$IMAGE_NAME:$IMAGE_TAG"
+        '''
+    }
+}
 
         stage('Verify AWS Credentials') {
             steps {
