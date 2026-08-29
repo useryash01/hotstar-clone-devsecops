@@ -1,0 +1,65 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: hotstar-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: hotstar-alerts
+      rules:
+
+        # 1. Hotstar deployment has fewer available replicas
+        - alert: HotstarDeploymentReplicasLow
+          expr: |
+            kube_deployment_status_replicas_available{
+              namespace="default",
+              deployment="hotstar-clone"
+            }
+            <
+            kube_deployment_spec_replicas{
+              namespace="default",
+              deployment="hotstar-clone"
+            }
+          for: 10s
+          labels:
+            severity: critical
+            application: hotstar
+          annotations:
+            summary: "Hotstar deployment has insufficient replicas"
+            description: "The Hotstar deployment has fewer available replicas than desired for more than 2 minutes."
+
+        # 2. High node CPU
+        - alert: EKSNodeHighCPU
+          expr: |
+            100 * (
+              1 -
+              avg by (instance) (
+                rate(node_cpu_seconds_total{mode="idle"}[5m])
+              )
+            ) > 80
+          for: 5m
+          labels:
+            severity: warning
+            application: hotstar
+          annotations:
+            summary: "EKS node CPU usage is high"
+            description: "An EKS node has CPU utilization above 80% for more than 5 minutes."
+
+        # 3. Hotstar pod restarting repeatedly
+        - alert: HotstarPodRestarting
+          expr: |
+            increase(
+              kube_pod_container_status_restarts_total{
+                namespace="default",
+                pod=~"hotstar-clone-.*"
+              }[10m]
+            ) > 3
+          for: 2m
+          labels:
+            severity: warning
+            application: hotstar
+          annotations:
+            summary: "Hotstar pod is restarting repeatedly"
+            description: "A Hotstar pod has restarted more than 3 times within the last 10 minutes."
