@@ -21,9 +21,9 @@ pipeline {
 
     stages {
 
-        // --------------------------------------------------
-        // Checkout
-        // --------------------------------------------------
+        // ==================================================
+        // 1. CHECKOUT
+        // ==================================================
 
         stage('Checkout') {
             steps {
@@ -31,27 +31,34 @@ pipeline {
             }
         }
 
-        // --------------------------------------------------
-        // Detect Jenkins-generated GitOps commit
-        // --------------------------------------------------
+
+        // ==================================================
+        // 2. DETECT GITOPS COMMIT
+        // ==================================================
 
         stage('Detect GitOps Commit') {
             steps {
                 script {
+
                     def commitMessage = sh(
                         script: "git log -1 --pretty=%B",
                         returnStdout: true
                     ).trim()
 
-                    echo "Latest commit message: ${commitMessage}"
+                    echo "Latest commit message:"
+                    echo "${commitMessage}"
 
                     if (commitMessage.contains('[ci-gitops]')) {
-                        env.SKIP_CI = 'true'
+
+                        env.IS_GITOPS_COMMIT = 'true'
 
                         echo "Jenkins-generated GitOps commit detected."
-                        echo "Skipping CI pipeline to prevent webhook loop."
+                        echo "Full CI/CD pipeline will still execute."
+                        echo "GitOps commit/push will be skipped at the final stage."
+
                     } else {
-                        env.SKIP_CI = 'false'
+
+                        env.IS_GITOPS_COMMIT = 'false'
 
                         echo "Normal application commit detected."
                         echo "Running full CI/CD pipeline."
@@ -60,58 +67,62 @@ pipeline {
             }
         }
 
-        // --------------------------------------------------
-        // Verify Tools
-        // --------------------------------------------------
+
+        // ==================================================
+        // 3. CHECK VERSIONS
+        // ==================================================
 
         stage('Check Versions') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
-                sh 'node --version'
-                sh 'npm --version'
-                sh 'docker --version'
-                sh 'aws --version'
-                sh 'trivy --version'
+
+                sh '''
+                    echo "=== Node.js ==="
+                    node --version
+
+                    echo "=== NPM ==="
+                    npm --version
+
+                    echo "=== Docker ==="
+                    docker --version
+
+                    echo "=== AWS CLI ==="
+                    aws --version
+
+                    echo "=== Trivy ==="
+                    trivy --version
+                '''
             }
         }
 
-        // --------------------------------------------------
-        // Install Dependencies
-        // --------------------------------------------------
+
+        // ==================================================
+        // 4. INSTALL DEPENDENCIES
+        // ==================================================
 
         stage('Install Dependencies') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 dir('app') {
+
                     sh '''
+                        echo "Installing application dependencies..."
+
                         npm ci --prefer-offline
+
+                        echo "Dependencies installed successfully."
                     '''
                 }
             }
         }
 
-        // --------------------------------------------------
-        // SonarQube
-        // --------------------------------------------------
+
+        // ==================================================
+        // 5. SONARQUBE SCAN
+        // ==================================================
 
         stage('SonarQube Scan') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 withSonarQubeEnv('SonarQube') {
 
                     sh '''
@@ -125,7 +136,10 @@ pipeline {
                     '''
 
                     dir('app') {
+
                         sh """
+                            echo "Running SonarQube scan..."
+
                             ${SCANNER_HOME}/bin/sonar-scanner \
                                 -Dsonar.projectKey=hotstar-clone \
                                 -Dsonar.projectName=hotstar-clone \
@@ -136,19 +150,17 @@ pipeline {
             }
         }
 
-        // --------------------------------------------------
-        // OWASP Dependency Check
-        // --------------------------------------------------
+
+        // ==================================================
+        // 6. OWASP DEPENDENCY CHECK
+        // ==================================================
 
         stage('OWASP Dependency Check') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 sh '''
+                    echo "Running OWASP Dependency Check..."
+
                     /opt/dependency-check/bin/dependency-check.sh \
                         --project "Hotstar Clone" \
                         --scan app \
@@ -157,22 +169,20 @@ pipeline {
                         --disableYarnAudit \
                         --disableAssembly \
                         --noupdate
+
+                    echo "OWASP Dependency Check completed."
                 '''
             }
         }
 
-        // --------------------------------------------------
-        // Publish OWASP Report
-        // --------------------------------------------------
+
+        // ==================================================
+        // 7. PUBLISH OWASP REPORT
+        // ==================================================
 
         stage('Publish OWASP Report') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 publishHTML(target: [
                     allowMissing: false,
                     alwaysLinkToLastBuild: true,
@@ -184,65 +194,63 @@ pipeline {
             }
         }
 
-        // --------------------------------------------------
-        // Build React Application
-        // --------------------------------------------------
+
+        // ==================================================
+        // 8. BUILD REACT APPLICATION
+        // ==================================================
 
         stage('Build React App') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 dir('app') {
+
                     sh '''
+                        echo "Building React application..."
+
                         CI=false npm run build
+
+                        echo "React application build completed."
                     '''
                 }
             }
         }
 
-        // --------------------------------------------------
-        // Docker Build
-        // --------------------------------------------------
+
+        // ==================================================
+        // 9. DOCKER BUILD
+        // ==================================================
 
         stage('Docker Build') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 sh '''
-                    echo "Building Docker image..."
+                    echo "======================================"
+                    echo "Building Docker image"
+                    echo "======================================"
 
                     docker build \
                         -t "$IMAGE_NAME:$IMAGE_TAG" \
                         -f docker/Dockerfile .
 
-                    echo "Docker image created:"
+                    echo "Docker image created successfully."
+
                     docker images "$IMAGE_NAME:$IMAGE_TAG"
                 '''
             }
         }
 
-        // --------------------------------------------------
-        // Trivy Security Scan
-        // --------------------------------------------------
+
+        // ==================================================
+        // 10. TRIVY IMAGE SCAN
+        // ==================================================
 
         stage('Trivy Image Scan') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 sh '''
-                    echo "Scanning Docker image with Trivy..."
+                    echo "======================================"
+                    echo "Scanning Docker image with Trivy"
+                    echo "======================================"
 
                     trivy image \
                         --timeout 10m \
@@ -251,65 +259,69 @@ pipeline {
                         --ignore-unfixed \
                         --exit-code 1 \
                         "$IMAGE_NAME:$IMAGE_TAG"
+
+                    echo "Trivy scan completed successfully."
                 '''
             }
         }
 
-        // --------------------------------------------------
-        // Verify AWS Credentials
-        // --------------------------------------------------
+
+        // ==================================================
+        // 11. VERIFY AWS CREDENTIALS
+        // ==================================================
 
         stage('Verify AWS Credentials') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
                      credentialsId: 'aws-ecr']
                 ]) {
 
                     sh '''
-                        echo "Testing AWS credentials..."
+                        echo "======================================"
+                        echo "Testing AWS credentials"
+                        echo "======================================"
+
                         aws sts get-caller-identity
 
                         echo "Testing ECR access..."
+
                         aws ecr describe-repositories \
                             --repository-names "$ECR_REPOSITORY" \
                             --region ap-south-1
+
+                        echo "AWS/ECR verification successful."
                     '''
                 }
             }
         }
 
-        // --------------------------------------------------
-        // Push Image to Amazon ECR
-        // --------------------------------------------------
+
+        // ==================================================
+        // 12. PUSH IMAGE TO ECR
+        // ==================================================
 
         stage('Push Image to ECR') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
                      credentialsId: 'aws-ecr']
                 ]) {
 
                     sh '''
-                        echo "Logging in to Amazon ECR..."
+                        echo "======================================"
+                        echo "Logging in to Amazon ECR"
+                        echo "======================================"
 
                         aws ecr get-login-password \
                             --region ap-south-1 | \
                         docker login \
                             --username AWS \
                             --password-stdin "$ECR_REGISTRY"
+
+                        echo "ECR login successful."
 
                         echo "Tagging image for ECR..."
 
@@ -322,50 +334,48 @@ pipeline {
                         docker push \
                             "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-                        echo "Image pushed successfully:"
+                        echo "======================================"
+                        echo "Image pushed successfully"
+                        echo "======================================"
+
                         echo "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
                     '''
                 }
             }
         }
 
-        // --------------------------------------------------
-        // Update Kubernetes Manifest
-        // --------------------------------------------------
+
+        // ==================================================
+        // 13. UPDATE KUBERNETES MANIFEST
+        // ==================================================
 
         stage('Update Kubernetes Manifest') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 sh '''
-                    echo "Updating Kubernetes deployment image..."
+                    echo "======================================"
+                    echo "Updating Kubernetes deployment image"
+                    echo "======================================"
 
                     sed -i \
                         "s|image: .*hotstar-clone:.*|image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|" \
                         kubernetes/deployment.yaml
 
                     echo "Updated Kubernetes image:"
+
                     grep "image:" kubernetes/deployment.yaml
                 '''
             }
         }
 
-        // --------------------------------------------------
-        // Commit and Push GitOps Change
-        // --------------------------------------------------
+
+        // ==================================================
+        // 14. COMMIT AND PUSH GITOPS CHANGE
+        // ==================================================
 
         stage('Commit and Push GitOps Change') {
-            when {
-                expression {
-                    env.SKIP_CI != 'true'
-                }
-            }
-
             steps {
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-credentials',
@@ -375,7 +385,9 @@ pipeline {
                 ]) {
 
                     sh '''
-                        echo "Configuring Git..."
+                        echo "======================================"
+                        echo "GitOps Commit Stage"
+                        echo "======================================"
 
                         git config user.name "Jenkins"
                         git config user.email "jenkins@localhost"
@@ -383,20 +395,34 @@ pipeline {
                         git add kubernetes/deployment.yaml
 
                         if git diff --cached --quiet; then
+
                             echo "No Kubernetes manifest changes detected."
+
                         else
-                            echo "Committing Kubernetes manifest update..."
 
-                            git commit \
-                                -m "[ci-gitops] Update Hotstar image to ${BUILD_NUMBER}"
+                            if [ "$IS_GITOPS_COMMIT" = "true" ]; then
 
-                            echo "Pushing GitOps change to GitHub..."
+                                echo "This build was triggered by a Jenkins GitOps commit."
+                                echo "Skipping another GitOps commit/push."
+                                echo "This prevents a GitHub -> Jenkins -> GitHub loop."
 
-                            git push \
-                                https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/useryash01/hotstar-clone-devsecops.git \
-                                HEAD:main
+                            else
 
-                            echo "GitOps change pushed successfully."
+                                echo "Normal application commit detected."
+                                echo "Creating GitOps commit..."
+
+                                git commit \
+                                    -m "[ci-gitops] Update Hotstar image to ${BUILD_NUMBER}"
+
+                                echo "Pushing GitOps change to GitHub..."
+
+                                git push \
+                                    https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/useryash01/hotstar-clone-devsecops.git \
+                                    HEAD:main
+
+                                echo "GitOps change pushed successfully."
+
+                            fi
                         fi
                     '''
                 }
@@ -404,13 +430,15 @@ pipeline {
         }
     }
 
-    // --------------------------------------------------
-    // Post Actions
-    // --------------------------------------------------
+
+    // ==================================================
+    // POST ACTIONS
+    // ==================================================
 
     post {
 
         always {
+
             archiveArtifacts(
                 artifacts: 'dependency-check-report/dependency-check-report.html',
                 allowEmptyArchive: true
@@ -420,11 +448,17 @@ pipeline {
         }
 
         success {
+
+            echo "======================================"
             echo "Pipeline completed successfully."
+            echo "======================================"
         }
 
         failure {
+
+            echo "======================================"
             echo "Pipeline failed."
+            echo "======================================"
         }
     }
 }
