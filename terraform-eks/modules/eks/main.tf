@@ -1,6 +1,24 @@
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
+  }
+}
+
 # ---------------------------------------------------------
 # EKS Cluster IAM Role
 # ---------------------------------------------------------
+
+data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "eks_assume_role" {
   statement {
@@ -33,6 +51,45 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 }
 
 # ---------------------------------------------------------
+# KMS Key for EKS Secrets Encryption
+# ---------------------------------------------------------
+
+data "aws_iam_policy_document" "eks_kms" {
+  statement {
+    sid    = "EnableIAMUserPermissions"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+      ]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_kms_key" "eks" {
+  description             = "KMS key for ${var.cluster_name} EKS secrets encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = data.aws_iam_policy_document.eks_kms.json
+
+  tags = {
+    Name      = "${var.cluster_name}-eks-secrets"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_kms_alias" "eks" {
+  name          = "alias/${var.cluster_name}-eks-secrets"
+  target_key_id = aws_kms_key.eks.key_id
+}
+
+# ---------------------------------------------------------
 # EKS Cluster
 # ---------------------------------------------------------
 
@@ -51,6 +108,18 @@ resource "aws_eks_cluster" "main" {
 
     endpoint_private_access = true
     endpoint_public_access  = true
+    public_access_cidrs     = ["152.59.9.44/32"]
+  }
+
+  # Encrypt Kubernetes Secrets using AWS KMS
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.eks.arn
+    }
+
+    resources = [
+      "secrets"
+    ]
   }
 
   enabled_cluster_log_types = [
@@ -62,7 +131,8 @@ resource "aws_eks_cluster" "main" {
   ]
 
   depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy
+    aws_iam_role_policy_attachment.eks_cluster_policy,
+    aws_kms_key.eks
   ]
 
   tags = {

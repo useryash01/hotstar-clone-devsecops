@@ -4,16 +4,12 @@ module "vpc" {
   project_name = var.project_name
   vpc_cidr     = var.vpc_cidr
 }
-
 module "eks" {
   source = "./modules/eks"
-
-  project_name = var.project_name
 
   cluster_name       = var.cluster_name
   kubernetes_version = var.kubernetes_version
 
-  vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
 
   node_instance_types = var.node_instance_types
@@ -45,9 +41,7 @@ module "alb_controller" {
   source = "./modules/alb-controller"
 
   project_name = var.project_name
-  aws_region   = var.aws_region
 
-  cluster_name = module.eks.cluster_name
 
   oidc_provider_arn = module.eks.oidc_provider_arn
   oidc_issuer_url   = module.eks.oidc_issuer_url

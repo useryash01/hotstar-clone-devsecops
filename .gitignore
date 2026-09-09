@@ -4,6 +4,8 @@
 *.tfstate.*
 *.tfvars
 !terraform.tfvars.example
+*.tfplan
+tfplan
 
 # Jenkins
 jenkins/*.log
@@ -11,6 +13,7 @@ jenkins/*.log
 # Dependency Check
 dependency-check-report/
 reports/
+dependency-check-*.zip
 
 # Node
 **/node_modules/
@@ -24,4 +27,16 @@ reports/
 .env.*
 *.pem
 *.key
-dependency-check-*.zip
+kubernetes/secret.yaml
+
+# Stray binaries
+*.deb
+
+# Accidental Windows/PowerShell artifacts
+Get-Date
+Get-Service
+Get-TimeZone
+Set-Service
+Set-TimeZone
+Start-Service
+w32tm

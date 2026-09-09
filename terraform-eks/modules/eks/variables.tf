@@ -8,11 +8,6 @@ variable "kubernetes_version" {
   type        = string
 }
 
-variable "vpc_id" {
-  description = "VPC ID for the EKS cluster"
-  type        = string
-}
-
 variable "private_subnet_ids" {
   description = "Private subnet IDs for EKS"
   type        = list(string)
@@ -36,9 +31,4 @@ variable "node_desired_size" {
 variable "node_max_size" {
   description = "Maximum node count"
   type        = number
-}
-
-variable "project_name" {
-  description = "Project name"
-  type        = string
 }
