@@ -73,6 +73,11 @@ pipeline {
         // ==================================================
 
         stage('Check Versions') {
+            when {
+                 expression {
+                     env.IS_GITOPS_COMMIT != 'true'
+                 }
+            }
             steps {
 
                 sh '''
@@ -100,6 +105,11 @@ pipeline {
         // ==================================================
 
         stage('Install Dependencies') {
+            when {
+                 expression {
+                     env.IS_GITOPS_COMMIT != 'true'
+                 }
+            }
             steps {
 
                 dir('app') {
@@ -121,6 +131,11 @@ pipeline {
         // ==================================================
 
         stage('SonarQube Scan') {
+            when {
+                expression {
+                    env.IS_GITOPS_COMMIT != 'true'
+                }
+            }
             steps {
 
                 withSonarQubeEnv('SonarQube') {
@@ -156,6 +171,11 @@ pipeline {
         // ==================================================
 
         stage('OWASP Dependency Check') {
+            when {
+                 expression {
+                     env.IS_GITOPS_COMMIT != 'true'
+                 }
+            }
             steps {
                 sh '''
             /opt/dependency-check/bin/dependency-check.sh \
@@ -179,6 +199,11 @@ pipeline {
         // ==================================================
 
         stage('Publish OWASP Report') {
+            when {
+                 expression {
+                     env.IS_GITOPS_COMMIT != 'true'
+                 }
+            }
             steps {
 
                 publishHTML(target: [
@@ -198,6 +223,11 @@ pipeline {
         // ==================================================
 
         stage('Build React App') {
+            when {
+                 expression {
+                     env.IS_GITOPS_COMMIT != 'true'
+                 }
+            }
             steps {
 
                 dir('app') {
@@ -207,7 +237,7 @@ pipeline {
 
                         CI=false npm run build
 
-                        echo "React application build completed."
+
                     '''
                 }
             }
@@ -219,6 +249,11 @@ pipeline {
         // ==================================================
 
         stage('Docker Build') {
+            when {
+                 expression {
+                     env.IS_GITOPS_COMMIT != 'true'
+                 }
+            }
             steps {
 
                 sh '''
@@ -243,6 +278,11 @@ pipeline {
         // ==================================================
 
         stage('Trivy Image Scan') {
+             when {
+                  expression {
+                      env.IS_GITOPS_COMMIT != 'true'
+                  }
+            }
             steps {
 
                 sh '''
@@ -269,6 +309,11 @@ pipeline {
         // ==================================================
 
         stage('Verify AWS Credentials') {
+             when {
+                  expression {
+                      env.IS_GITOPS_COMMIT != 'true'
+                  }
+            }
             steps {
 
                 withCredentials([
@@ -301,6 +346,11 @@ pipeline {
         // ==================================================
 
         stage('Push Image to ECR') {
+             when {
+                  expression {
+                      env.IS_GITOPS_COMMIT != 'true'
+                  }
+            }
             steps {
 
                 withCredentials([
@@ -348,6 +398,11 @@ pipeline {
         // ==================================================
 
         stage('Update Kubernetes Manifest') {
+             when {
+                  expression {
+                      env.IS_GITOPS_COMMIT != 'true'
+                  }
+            }
             steps {
 
                 sh '''
@@ -372,6 +427,11 @@ pipeline {
         // ==================================================
 
         stage('Commit and Push GitOps Change') {
+             when {
+                  expression {
+                      env.IS_GITOPS_COMMIT != 'true'
+                  }
+            }
             steps {
 
                 withCredentials([
