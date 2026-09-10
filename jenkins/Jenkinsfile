@@ -112,22 +112,23 @@ pipeline {
 
         stage('OWASP Dependency Check') {
             steps {
-        sh '''
-            set -e
+                sh '''
+                    set -e
 
-            /opt/dependency-check/bin/dependency-check.sh \
-                --project "Hotstar Clone" \
-                --scan app/package.json \
-                --scan app/package-lock.json \
-                --format HTML \
-                --out dependency-check-report \
-                --disableYarnAudit \
-                --disableAssembly \
-                --noupdate \
-                --failOnCVSS 9 \
-                --data /opt/dependency-check/data
-        '''
-    }
+                    /opt/dependency-check/bin/dependency-check.sh \
+                        --project "Hotstar Clone" \
+                        --scan app/package.json \
+                        --scan app/package-lock.json \
+                        --format HTML \
+                        --out dependency-check-report \
+                        --disableYarnAudit \
+                        --disableAssembly \
+                        --noupdate \
+                        --failOnCVSS 9 \
+                        --data /opt/dependency-check/data
+                 '''
+            }
+        }
 
         // ==================================================
         // 6. PUBLISH OWASP REPORT
