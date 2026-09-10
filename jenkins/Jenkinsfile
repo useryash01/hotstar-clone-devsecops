@@ -286,23 +286,26 @@ pipeline {
         // 12. UPDATE KUBERNETES MANIFEST
         // ==================================================
 
-        stage('Update Kubernetes Manifest') {
-            steps {
-                sh '''
-                    echo "======================================"
-                    echo "Updating Kubernetes deployment image"
-                    echo "======================================"
+        stage('Deploy to EKS') {
+    steps {
+        withCredentials([
+            [$class: 'AmazonWebServicesCredentialsBinding',
+             credentialsId: 'aws-ecr']
+        ]) {
+            sh '''
+                aws eks update-kubeconfig \
+                    --region ap-south-1 \
+                    --name hotstar-eks
 
-                    sed -i \
-                        "s|image: .*hotstar-clone:.*|image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG|" \
-                        kubernetes/deployment.yaml
+                kubectl apply -f kubernetes/
 
-                    echo "Updated Kubernetes image:"
-
-                    grep "image:" kubernetes/deployment.yaml
-                '''
-            }
+                kubectl rollout status \
+                    deployment/hotstar-clone \
+                    --timeout=5m
+            '''
         }
+    }
+}
 
         // ==================================================
         // 13. COMMIT AND PUSH GITOPS CHANGE
