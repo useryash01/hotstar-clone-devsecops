@@ -31,55 +31,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 2. DETECT GITOPS COMMIT
-        // ==================================================
-
-        stage('Detect GitOps Commit') {
-            steps {
-                script {
-
-                    def commitMessage = sh(
-                        script: "git log -1 --pretty=%B",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Latest commit message:"
-                    echo "${commitMessage}"
-
-                    if (commitMessage.contains('[ci-gitops]')) {
-
-                        env.IS_GITOPS_COMMIT = 'true'
-
-                        echo "Jenkins-generated GitOps commit detected."
-                        echo "Full CI/CD pipeline will still execute."
-                        echo "GitOps commit/push will be skipped at the final stage."
-
-                    } else {
-
-                        env.IS_GITOPS_COMMIT = 'false'
-
-                        echo "Normal application commit detected."
-                        echo "Running full CI/CD pipeline."
-                    }
-                }
-            }
-        }
-
-
-        // ==================================================
-        // 3. CHECK VERSIONS
+        // 2. CHECK VERSIONS
         // ==================================================
 
         stage('Check Versions') {
-            when {
-                 expression {
-                     env.IS_GITOPS_COMMIT != 'true'
-                 }
-            }
             steps {
-
                 sh '''
                     echo "=== Node.js ==="
                     node --version
@@ -99,21 +56,13 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 4. INSTALL DEPENDENCIES
+        // 3. INSTALL DEPENDENCIES
         // ==================================================
 
         stage('Install Dependencies') {
-            when {
-                 expression {
-                     env.IS_GITOPS_COMMIT != 'true'
-                 }
-            }
             steps {
-
                 dir('app') {
-
                     sh '''
                         echo "Installing application dependencies..."
 
@@ -125,19 +74,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 5. SONARQUBE SCAN
+        // 4. SONARQUBE SCAN
         // ==================================================
 
         stage('SonarQube Scan') {
-            when {
-                expression {
-                    env.IS_GITOPS_COMMIT != 'true'
-                }
-            }
             steps {
-
                 withSonarQubeEnv('SonarQube') {
 
                     sh '''
@@ -151,7 +93,6 @@ pipeline {
                     '''
 
                     dir('app') {
-
                         sh """
                             echo "Running SonarQube scan..."
 
@@ -165,47 +106,34 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 6. OWASP DEPENDENCY CHECK
+        // 5. OWASP DEPENDENCY CHECK
         // ==================================================
 
         stage('OWASP Dependency Check') {
-            when {
-                 expression {
-                     env.IS_GITOPS_COMMIT != 'true'
-                 }
-            }
             steps {
                 sh '''
-            /opt/dependency-check/bin/dependency-check.sh \
-                --project "Hotstar Clone" \
-                --scan app \
-                --exclude app/node_modules \
-                --exclude app/build \
-                --exclude app/.git \
-                --format HTML \
-                --out dependency-check-report \
-                --disableYarnAudit \
-                --disableAssembly \
-                --noupdate
-        '''
-    }
-}
-
+                    /opt/dependency-check/bin/dependency-check.sh \
+                        --project "Hotstar Clone" \
+                        --scan app \
+                        --exclude app/node_modules \
+                        --exclude app/build \
+                        --exclude app/.git \
+                        --format HTML \
+                        --out dependency-check-report \
+                        --disableYarnAudit \
+                        --disableAssembly \
+                        --noupdate
+                '''
+            }
+        }
 
         // ==================================================
-        // 7. PUBLISH OWASP REPORT
+        // 6. PUBLISH OWASP REPORT
         // ==================================================
 
         stage('Publish OWASP Report') {
-            when {
-                 expression {
-                     env.IS_GITOPS_COMMIT != 'true'
-                 }
-            }
             steps {
-
                 publishHTML(target: [
                     allowMissing: false,
                     alwaysLinkToLastBuild: true,
@@ -217,45 +145,28 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 8. BUILD REACT APPLICATION
+        // 7. BUILD REACT APPLICATION
         // ==================================================
 
         stage('Build React App') {
-            when {
-                 expression {
-                     env.IS_GITOPS_COMMIT != 'true'
-                 }
-            }
             steps {
-
                 dir('app') {
-
                     sh '''
                         echo "Building React application..."
 
                         CI=false npm run build
-
-
                     '''
                 }
             }
         }
 
-
         // ==================================================
-        // 9. DOCKER BUILD
+        // 8. DOCKER BUILD
         // ==================================================
 
         stage('Docker Build') {
-            when {
-                 expression {
-                     env.IS_GITOPS_COMMIT != 'true'
-                 }
-            }
             steps {
-
                 sh '''
                     echo "======================================"
                     echo "Building Docker image"
@@ -272,19 +183,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 10. TRIVY IMAGE SCAN
+        // 9. TRIVY IMAGE SCAN
         // ==================================================
 
         stage('Trivy Image Scan') {
-             when {
-                  expression {
-                      env.IS_GITOPS_COMMIT != 'true'
-                  }
-            }
             steps {
-
                 sh '''
                     echo "======================================"
                     echo "Scanning Docker image with Trivy"
@@ -303,19 +207,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 11. VERIFY AWS CREDENTIALS
+        // 10. VERIFY AWS CREDENTIALS
         // ==================================================
 
         stage('Verify AWS Credentials') {
-             when {
-                  expression {
-                      env.IS_GITOPS_COMMIT != 'true'
-                  }
-            }
             steps {
-
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
                      credentialsId: 'aws-ecr']
@@ -340,19 +237,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 12. PUSH IMAGE TO ECR
+        // 11. PUSH IMAGE TO ECR
         // ==================================================
 
         stage('Push Image to ECR') {
-             when {
-                  expression {
-                      env.IS_GITOPS_COMMIT != 'true'
-                  }
-            }
             steps {
-
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
                      credentialsId: 'aws-ecr']
@@ -392,19 +282,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 13. UPDATE KUBERNETES MANIFEST
+        // 12. UPDATE KUBERNETES MANIFEST
         // ==================================================
 
         stage('Update Kubernetes Manifest') {
-             when {
-                  expression {
-                      env.IS_GITOPS_COMMIT != 'true'
-                  }
-            }
             steps {
-
                 sh '''
                     echo "======================================"
                     echo "Updating Kubernetes deployment image"
@@ -421,19 +304,12 @@ pipeline {
             }
         }
 
-
         // ==================================================
-        // 14. COMMIT AND PUSH GITOPS CHANGE
+        // 13. COMMIT AND PUSH GITOPS CHANGE
         // ==================================================
 
         stage('Commit and Push GitOps Change') {
-             when {
-                  expression {
-                      env.IS_GITOPS_COMMIT != 'true'
-                  }
-            }
             steps {
-
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-credentials',
@@ -453,41 +329,26 @@ pipeline {
                         git add kubernetes/deployment.yaml
 
                         if git diff --cached --quiet; then
-
                             echo "No Kubernetes manifest changes detected."
-
                         else
+                            echo "Creating GitOps commit..."
 
-                            if [ "$IS_GITOPS_COMMIT" = "true" ]; then
+                            git commit \
+                                -m "[ci-gitops] Update Hotstar image to ${BUILD_NUMBER}"
 
-                                echo "This build was triggered by a Jenkins GitOps commit."
-                                echo "Skipping another GitOps commit/push."
-                                echo "This prevents a GitHub -> Jenkins -> GitHub loop."
+                            echo "Pushing GitOps change to GitHub..."
 
-                            else
+                            git push \
+                                https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/useryash01/hotstar-clone-devsecops.git \
+                                HEAD:main
 
-                                echo "Normal application commit detected."
-                                echo "Creating GitOps commit..."
-
-                                git commit \
-                                    -m "[ci-gitops] Update Hotstar image to ${BUILD_NUMBER}"
-
-                                echo "Pushing GitOps change to GitHub..."
-
-                                git push \
-                                    https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/useryash01/hotstar-clone-devsecops.git \
-                                    HEAD:main
-
-                                echo "GitOps change pushed successfully."
-
-                            fi
+                            echo "GitOps change pushed successfully."
                         fi
                     '''
                 }
             }
         }
     }
-
 
     // ==================================================
     // POST ACTIONS
@@ -496,7 +357,6 @@ pipeline {
     post {
 
         always {
-
             archiveArtifacts(
                 artifacts: 'dependency-check-report/dependency-check-report.html',
                 allowEmptyArchive: true
@@ -506,14 +366,12 @@ pipeline {
         }
 
         success {
-
             echo "======================================"
             echo "Pipeline completed successfully."
             echo "======================================"
         }
 
         failure {
-
             echo "======================================"
             echo "Pipeline failed."
             echo "======================================"
