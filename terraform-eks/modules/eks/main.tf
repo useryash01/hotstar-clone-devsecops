@@ -108,7 +108,7 @@ resource "aws_eks_cluster" "main" {
 
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["152.59.9.44/32"]
+    public_access_cidrs     = ["152.58.14.75/32"]
   }
 
   # Encrypt Kubernetes Secrets using AWS KMS
