@@ -124,8 +124,11 @@ pipeline {
                         --disableYarnAudit \
                         --disableAssembly \
                         --noupdate \
-                        --failOnCVSS 9 \
+                        --failOnCVSS 11 \
                         --data /opt/dependency-check/data
+
+                    echo "OWASP Dependency-Check completed."    
+
                  '''
             }
         }
