@@ -98,6 +98,11 @@ resource "aws_eks_cluster" "main" {
   version  = var.kubernetes_version
   role_arn = aws_iam_role.eks_cluster.arn
 
+  lifecycle {
+    ignore_changes = [vpc_config[0].public_access_cidrs]
+  }
+
+
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
     bootstrap_cluster_creator_admin_permissions = true
@@ -108,7 +113,7 @@ resource "aws_eks_cluster" "main" {
 
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["152.59.6.154/32"]
+    public_access_cidrs     = ["47.11.21.113/32"]
   }
 
   # Encrypt Kubernetes Secrets using AWS KMS
@@ -218,6 +223,11 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
 # ---------------------------------------------------------
 
 resource "aws_eks_node_group" "main" {
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-nodes"
 
