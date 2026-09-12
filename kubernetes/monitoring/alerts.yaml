@@ -28,7 +28,7 @@ spec:
             application: hotstar
           annotations:
             summary: "Hotstar deployment has insufficient replicas"
-            description: "The Hotstar deployment has fewer available replicas than desired for more than 2 minutes."
+            description: "The Hotstar deployment has fewer available replicas than desired for more than 10 seconds."
 
         # 2. High node CPU
         - alert: EKSNodeHighCPU
