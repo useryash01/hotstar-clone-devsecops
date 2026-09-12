@@ -22,15 +22,101 @@ spec:
               namespace="default",
               deployment="hotstar-clone"
             }
-          for: 10s
+          for: 2m
           labels:
             severity: critical
             application: hotstar
           annotations:
             summary: "Hotstar deployment has insufficient replicas"
-            description: "The Hotstar deployment has fewer available replicas than desired for more than 10 seconds."
+            description: "The Hotstar deployment has fewer available replicas than desired for more than 2 minutes."
 
-        # 2. High node CPU
+        # 2. Hotstar deployment has no available replicas
+        - alert: HotstarDeploymentUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{
+              namespace="default",
+              deployment="hotstar-clone"
+            } == 0
+          for: 2m
+          labels:
+            severity: critical
+            application: hotstar
+          annotations:
+            summary: "Hotstar deployment is unavailable"
+            description: "The Hotstar deployment has had zero available replicas for more than 2 minutes."
+
+        # 3. Hotstar pods are restarting repeatedly
+        - alert: HotstarPodRestarting
+          expr: |
+            increase(
+              kube_pod_container_status_restarts_total{
+                namespace="default",
+                pod=~"hotstar-clone-.*"
+              }[10m]
+            ) > 3
+          for: 2m
+          labels:
+            severity: warning
+            application: hotstar
+          annotations:
+            summary: "Hotstar pod is restarting repeatedly"
+            description: "A Hotstar pod has restarted more than 3 times within the last 10 minutes."
+
+        # 4. Hotstar pod is in CrashLoopBackOff
+        - alert: HotstarPodCrashLoopBackOff
+          expr: |
+            max by (pod, container) (
+              kube_pod_container_status_waiting_reason{
+                namespace="default",
+                pod=~"hotstar-clone-.*",
+                reason="CrashLoopBackOff"
+              }
+            ) == 1
+          for: 2m
+          labels:
+            severity: critical
+            application: hotstar
+          annotations:
+            summary: "Hotstar pod is in CrashLoopBackOff"
+            description: "A Hotstar container has been in CrashLoopBackOff for more than 2 minutes."
+
+        # 5. Hotstar pod is not ready
+        - alert: HotstarPodNotReady
+          expr: |
+            kube_pod_status_ready{
+              namespace="default",
+              pod=~"hotstar-clone-.*",
+              condition="true"
+            } == 0
+          for: 5m
+          labels:
+            severity: warning
+            application: hotstar
+          annotations:
+            summary: "Hotstar pod is not ready"
+            description: "A Hotstar pod has not been Ready for more than 5 minutes."
+
+        # 6. Hotstar HPA has reached maximum replicas
+        - alert: HotstarHPAMaxReplicas
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas{
+              namespace="default",
+              horizontalpodautoscaler="hotstar-hpa"
+            }
+            >=
+            kube_horizontalpodautoscaler_spec_max_replicas{
+              namespace="default",
+              horizontalpodautoscaler="hotstar-hpa"
+            }
+          for: 5m
+          labels:
+            severity: warning
+            application: hotstar
+          annotations:
+            summary: "Hotstar HPA has reached maximum replicas"
+            description: "The Hotstar HPA has been running at its maximum replica count for more than 5 minutes."
+
+        # 7. EKS node CPU usage is high
         - alert: EKSNodeHighCPU
           expr: |
             100 * (
@@ -47,19 +133,54 @@ spec:
             summary: "EKS node CPU usage is high"
             description: "An EKS node has CPU utilization above 80% for more than 5 minutes."
 
-        # 3. Hotstar pod restarting repeatedly
-        - alert: HotstarPodRestarting
+        # 8. EKS node memory usage is high
+        - alert: EKSNodeHighMemory
           expr: |
-            increase(
-              kube_pod_container_status_restarts_total{
-                namespace="default",
-                pod=~"hotstar-clone-.*"
-              }[10m]
-            ) > 3
-          for: 2m
+            100 * (
+              1 -
+              (
+                node_memory_MemAvailable_bytes
+                /
+                node_memory_MemTotal_bytes
+              )
+            ) > 85
+          for: 5m
           labels:
             severity: warning
             application: hotstar
           annotations:
-            summary: "Hotstar pod is restarting repeatedly"
-            description: "A Hotstar pod has restarted more than 3 times within the last 10 minutes."
+            summary: "EKS node memory usage is high"
+            description: "An EKS node has memory utilization above 85% for more than 5 minutes."
+
+        # 9. EKS node is under disk pressure
+        - alert: EKSNodeDiskPressure
+          expr: |
+            kube_node_status_condition{
+              condition="DiskPressure",
+              status="true"
+            } == 1
+          for: 5m
+          labels:
+            severity: critical
+            application: hotstar
+          annotations:
+            summary: "EKS node is under disk pressure"
+            description: "An EKS node has reported DiskPressure for more than 5 minutes."
+
+        # 10. Hotstar container was OOMKilled
+        - alert: HotstarContainerOOMKilled
+          expr: |
+            max by (pod, container) (
+              kube_pod_container_status_last_terminated_reason{
+                namespace="default",
+                pod=~"hotstar-clone-.*",
+                reason="OOMKilled"
+              }
+            ) == 1
+          for: 1m
+          labels:
+            severity: critical
+            application: hotstar
+          annotations:
+            summary: "Hotstar container was OOMKilled"
+            description: "A Hotstar container was terminated because it exceeded its memory limit."
