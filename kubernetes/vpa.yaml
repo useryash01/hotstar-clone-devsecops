@@ -10,7 +10,7 @@ spec:
     name: hotstar-clone
 
   updatePolicy:
-    updateMode: "Off"
+    updateMode: "InPlaceOrRecreate"
 
   resourcePolicy:
     containerPolicies:
