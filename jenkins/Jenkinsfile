@@ -200,7 +200,7 @@ pipeline {
                     echo "======================================"
 
                     trivy image \
-                        --timeout 10m \
+                        --timeout 30m \
                         --scanners vuln \
                         --severity CRITICAL \
                         --ignore-unfixed \
