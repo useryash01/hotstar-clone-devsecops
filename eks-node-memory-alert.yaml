@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: hotstar-custom-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: hotstar-node-alerts
+      rules:
+        - alert: EKSNodeHighMemory
+          expr: |
+            (
+              1 -
+              (
+                node_memory_MemAvailable_bytes
+                /
+                node_memory_MemTotal_bytes
+              )
+            ) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            service: hotstar
+          annotations:
+            summary: "EKS node memory usage is high"
+            description: "EKS node {{ $labels.instance }} is using more than 80% memory for over 5 minutes."
