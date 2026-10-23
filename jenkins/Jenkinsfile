@@ -12,91 +12,57 @@ pipeline {
     environment {
         IMAGE_NAME      = "yashdevops123/hotstar-clone"
         IMAGE_TAG       = "${BUILD_NUMBER}"
-
-        ECR_REGISTRY    = "634737373070.dkr.ecr.ap-south-1.amazonaws.com"
+        ECR_REGISTRY    = "386963841514.dkr.ecr.ap-south-1.amazonaws.com"
         ECR_REPOSITORY  = "hotstar-clone"
-
+        AWS_REGION      = "ap-south-1"
+        EKS_CLUSTER     = "hotstar-eks"
         SCANNER_HOME    = tool 'sonar-scanner'
     }
 
     stages {
-
-        // ==================================================
-        // 1. CHECKOUT
-        // ==================================================
-
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        // ==================================================
-        // 2. CHECK VERSIONS
-        // ==================================================
 
         stage('Check Versions') {
             steps {
                 sh '''
+                    set -eu
                     echo "=== Node.js ==="
                     node --version
-
                     echo "=== NPM ==="
                     npm --version
-
                     echo "=== Docker ==="
                     docker --version
-
                     echo "=== AWS CLI ==="
                     aws --version
-
                     echo "=== Trivy ==="
                     trivy --version
                 '''
             }
         }
 
-        // ==================================================
-        // 3. INSTALL DEPENDENCIES
-        // ==================================================
-
         stage('Install Dependencies') {
             steps {
                 dir('app') {
                     sh '''
-                        echo "Installing application dependencies..."
-
+                        set -eu
                         npm ci --prefer-offline
-
-                        echo "Dependencies installed successfully."
                     '''
                 }
             }
         }
 
-        // ==================================================
-        // 4. SONARQUBE SCAN
-        // ==================================================
-
         stage('SonarQube Scan') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-
-                    sh '''
-                        echo "SonarQube Host: $SONAR_HOST_URL"
-
-                        if [ -n "$SONAR_AUTH_TOKEN" ]; then
-                            echo "SONAR_TOKEN_PRESENT=YES"
-                        else
-                            echo "SONAR_TOKEN_PRESENT=NO"
-                        fi
-                    '''
-
                     dir('app') {
                         sh """
-                            echo "Running SonarQube scan..."
-
-                            ${SCANNER_HOME}/bin/sonar-scanner \
+                            set -eu
+                            "${SCANNER_HOME}/bin/sonar-scanner" \
                                 -Dsonar.projectKey=hotstar-clone \
                                 -Dsonar.projectName=hotstar-clone \
                                 -Dsonar.sources=src
@@ -106,14 +72,11 @@ pipeline {
             }
         }
 
-        // ==================================================
-        // 5. OWASP DEPENDENCY CHECK
-        // ==================================================
-
         stage('OWASP Dependency Check') {
             steps {
                 sh '''
-                    set -e
+                    set -eu
+                    mkdir -p dependency-check-report
 
                     /opt/dependency-check/bin/dependency-check.sh \
                         --project "Hotstar Clone" \
@@ -124,18 +87,11 @@ pipeline {
                         --disableYarnAudit \
                         --disableAssembly \
                         --noupdate \
-                        --failOnCVSS 11 \
+                        --failOnCVSS 7.0 \
                         --data /opt/dependency-check/data
-
-                    echo "OWASP Dependency-Check completed."    
-
-                 '''
+                '''
             }
         }
-
-        // ==================================================
-        // 6. PUBLISH OWASP REPORT
-        // ==================================================
 
         stage('Publish OWASP Report') {
             steps {
@@ -150,55 +106,33 @@ pipeline {
             }
         }
 
-        // ==================================================
-        // 7. BUILD REACT APPLICATION
-        // ==================================================
-
         stage('Build React App') {
             steps {
                 dir('app') {
                     sh '''
-                        echo "Building React application..."
-
+                        set -eu
                         CI=false npm run build
                     '''
                 }
             }
         }
 
-        // ==================================================
-        // 8. DOCKER BUILD
-        // ==================================================
-
         stage('Docker Build') {
             steps {
                 sh '''
-                    echo "======================================"
-                    echo "Building Docker image"
-                    echo "======================================"
-
+                    set -eu
                     docker build \
                         -t "$IMAGE_NAME:$IMAGE_TAG" \
                         -f docker/Dockerfile .
-
-                    echo "Docker image created successfully."
-
                     docker images "$IMAGE_NAME:$IMAGE_TAG"
                 '''
             }
         }
 
-        // ==================================================
-        // 9. TRIVY IMAGE SCAN
-        // ==================================================
-
         stage('Trivy Image Scan') {
             steps {
                 sh '''
-                    echo "======================================"
-                    echo "Scanning Docker image with Trivy"
-                    echo "======================================"
-
+                    set -eu
                     trivy image \
                         --timeout 30m \
                         --scanners vuln \
@@ -206,15 +140,9 @@ pipeline {
                         --ignore-unfixed \
                         --exit-code 1 \
                         "$IMAGE_NAME:$IMAGE_TAG"
-
-                    echo "Trivy scan completed successfully."
                 '''
             }
         }
-
-        // ==================================================
-        // 10. VERIFY AWS CREDENTIALS
-        // ==================================================
 
         stage('Verify AWS Credentials') {
             steps {
@@ -222,29 +150,19 @@ pipeline {
                     [$class: 'AmazonWebServicesCredentialsBinding',
                      credentialsId: 'aws-ecr']
                 ]) {
-
                     sh '''
-                        echo "======================================"
-                        echo "Testing AWS credentials"
-                        echo "======================================"
-
+                        set -eu
+                        set +x
                         aws sts get-caller-identity
-
-                        echo "Testing ECR access..."
-
                         aws ecr describe-repositories \
                             --repository-names "$ECR_REPOSITORY" \
-                            --region ap-south-1
-
-                        echo "AWS/ECR verification successful."
+                            --region "$AWS_REGION" \
+                            --query 'repositories[0].repositoryUri' \
+                            --output text
                     '''
                 }
             }
         }
-
-        // ==================================================
-        // 11. PUSH IMAGE TO ECR
-        // ==================================================
 
         stage('Push Image to ECR') {
             steps {
@@ -252,71 +170,27 @@ pipeline {
                     [$class: 'AmazonWebServicesCredentialsBinding',
                      credentialsId: 'aws-ecr']
                 ]) {
-
                     sh '''
-                        echo "======================================"
-                        echo "Logging in to Amazon ECR"
-                        echo "======================================"
+                        set -eu
+                        set +x
 
                         aws ecr get-login-password \
-                            --region ap-south-1 | \
+                            --region "$AWS_REGION" |
                         docker login \
                             --username AWS \
                             --password-stdin "$ECR_REGISTRY"
 
-                        echo "ECR login successful."
+                        IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+                        docker tag "$IMAGE_NAME:$IMAGE_TAG" "$IMAGE_URI"
+                        docker push "$IMAGE_URI"
 
-                        echo "Tagging image for ECR..."
-
-                        docker tag \
-                            "$IMAGE_NAME:$IMAGE_TAG" \
-                            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-                        echo "Pushing image to ECR..."
-
-                        docker push \
-                            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-                        echo "======================================"
-                        echo "Image pushed successfully"
-                        echo "======================================"
-
-                        echo "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+                        echo "Pushed image: $IMAGE_URI"
                     '''
                 }
             }
         }
 
-        // ==================================================
-        // 12. UPDATE KUBERNETES MANIFEST
-        // ==================================================
-
-        stage('Deploy to EKS') {
-    steps {
-        withCredentials([
-            [$class: 'AmazonWebServicesCredentialsBinding',
-             credentialsId: 'aws-ecr']
-        ]) {
-            sh '''
-                aws eks update-kubeconfig \
-                    --region ap-south-1 \
-                    --name hotstar-eks
-
-                kubectl apply -f kubernetes/
-
-                kubectl rollout status \
-                    deployment/hotstar-clone \
-                    --timeout=5m
-            '''
-        }
-    }
-}
-
-        // ==================================================
-        // 13. COMMIT AND PUSH GITOPS CHANGE
-        // ==================================================
-
-        stage('Commit and Push GitOps Change') {
+        stage('Update and Push Deployment Manifest') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -325,64 +199,95 @@ pipeline {
                         passwordVariable: 'GIT_TOKEN'
                     )
                 ]) {
-
                     sh '''
-                        echo "======================================"
-                        echo "GitOps Commit Stage"
-                        echo "======================================"
+                        set -eu
+                        set +x
+
+                        IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+                        sed -i \
+                          "s|image: .*hotstar-clone:.*|image: ${IMAGE_URI}|" \
+                          kubernetes/deployment.yaml
+
+                        echo "Manifest image:"
+                        grep -n 'image:' kubernetes/deployment.yaml
 
                         git config user.name "Jenkins"
                         git config user.email "jenkins@localhost"
-
                         git add kubernetes/deployment.yaml
 
                         if git diff --cached --quiet; then
-                            echo "No Kubernetes manifest changes detected."
+                            echo "Deployment manifest already has this image."
                         else
-                            echo "Creating GitOps commit..."
+                            git commit -m "ci: update Hotstar image to ${IMAGE_TAG}"
 
-                            git commit \
-                                -m "[ci-gitops] Update Hotstar image to ${BUILD_NUMBER}"
+                            ASKPASS="$(mktemp)"
+                            trap 'rm -f "$ASKPASS"' EXIT
+                            cat > "$ASKPASS" <<'ASKPASS_SCRIPT'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' "$GIT_USERNAME" ;;
+  *Password*) printf '%s\n' "$GIT_TOKEN" ;;
+  *) exit 1 ;;
+esac
+ASKPASS_SCRIPT
+                            chmod 700 "$ASKPASS"
 
-                            echo "Pushing GitOps change to GitHub..."
-
-                            git push \
-                                https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/useryash01/hotstar-clone-devsecops.git \
-                                HEAD:main
-
-                            echo "GitOps change pushed successfully."
+                            GIT_ASKPASS="$ASKPASS" \
+                            GIT_TERMINAL_PROMPT=0 \
+                                git push origin HEAD:main
                         fi
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-ecr']
+                ]) {
+                    sh '''
+                        set -eu
+                        set +x
+
+                        aws eks update-kubeconfig \
+                            --region "$AWS_REGION" \
+                            --name "$EKS_CLUSTER"
+
+                        # Apply only the application Deployment. Other
+                        # resources such as Ingress and Secrets are untouched.
+                        kubectl apply -f kubernetes/deployment.yaml
+
+                        kubectl rollout status \
+                            deployment/hotstar-clone \
+                            --timeout=5m
+
+                        echo "Deployed image:"
+                        kubectl get deployment hotstar-clone \
+                            -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
                     '''
                 }
             }
         }
     }
 
-    // ==================================================
-    // POST ACTIONS
-    // ==================================================
-
     post {
-
         always {
             archiveArtifacts(
                 artifacts: 'dependency-check-report/dependency-check-report.html',
                 allowEmptyArchive: true
             )
-
             cleanWs()
         }
 
         success {
-            echo "======================================"
-            echo "Pipeline completed successfully."
-            echo "======================================"
+            echo 'Pipeline completed successfully.'
         }
 
         failure {
-            echo "======================================"
-            echo "Pipeline failed."
-            echo "======================================"
+            echo 'Pipeline failed. Review the stage logs above.'
         }
     }
 }
