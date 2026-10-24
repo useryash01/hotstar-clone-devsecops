@@ -184,3 +184,20 @@ spec:
           annotations:
             summary: "Hotstar container was OOMKilled"
             description: "A Hotstar container was terminated because it exceeded its memory limit."
+      - alert: AlertmanagerNotificationsFailing
+        expr: increase(alertmanager_notifications_failed_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager notification delivery failing"
+          description: "Alertmanager has recorded failed notification deliveries during the last 5 minutes."
+
+      - alert: AlertmanagerConfigReloadFailure
+        expr: alertmanager_config_last_reload_successful == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager configuration reload failed"
+          description: "Alertmanager could not successfully reload its configuration."
