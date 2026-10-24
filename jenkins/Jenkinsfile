@@ -265,7 +265,8 @@ ASKPASS_SCRIPT
 
                         echo "Deployed image:"
                         kubectl get deployment hotstar-clone \
-                            -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+                            -o jsonpath='{.spec.template.spec.containers[0].image}'
+                        echo
                     '''
                 }
             }
