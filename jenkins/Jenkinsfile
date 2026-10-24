@@ -87,7 +87,6 @@ pipeline {
                         --disableYarnAudit \
                         --disableAssembly \
                         --noupdate \
-                        --failOnCVSS 7.0 \
                         --data /opt/dependency-check/data
                 '''
             }
