@@ -10,7 +10,7 @@ spec:
     kind: Deployment
     name: hotstar-clone
 
-  minReplicas: 2
+  minReplicas: 3
   maxReplicas: 4
 
   behavior:
