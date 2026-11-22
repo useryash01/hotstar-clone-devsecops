@@ -98,10 +98,6 @@ resource "aws_eks_cluster" "main" {
   version  = var.kubernetes_version
   role_arn = aws_iam_role.eks_cluster.arn
 
-  lifecycle {
-    ignore_changes = [vpc_config[0].public_access_cidrs]
-  }
-
 
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
@@ -113,7 +109,15 @@ resource "aws_eks_cluster" "main" {
 
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["47.11.21.113/32"]
+    public_access_cidrs = [
+      "152.58.29.55/32",
+      "152.59.97.144/32",
+      "152.59.13.122/32",
+      "152.59.59.193/32",
+      "152.58.15.3/32",
+      "152.58.32.71/32",
+      "152.59.108.68/32"
+    ]
   }
 
   # Encrypt Kubernetes Secrets using AWS KMS
